@@ -17,9 +17,32 @@
 /*
  * Private module variable: current process ID (MPI rank)
  */
-static int rank;
+static int my_rank;
+static int nprocs;
 
+pthread_t server;           // server thread
+bool executing = false;     // are we still using the hash table?
+bool server_bool = false;   // condition variable failsafe
+pthread_cond_t server_cond = PTHREAD_COND_INITIALIZER;
+pthread_mutex_t server_lock = PTHREAD_MUTEX_INITIALIZER;
 
+/*
+ * Server threads wait here
+ */
+void *server_func(void *arg) {
+    while(executing){
+        while(!server_bool) {
+            printf("im in herebbbbbbbbbb\n");
+            pthread_mutex_lock(&server_lock);
+            pthread_cond_wait(&server_cond, &server_lock);
+            pthread_mutex_unlock(&server_lock);
+        }
+        // do a single task, go back to waiting
+        printf("im in hereaaaaaaaa\n");
+    }
+    printf("i'm about to return\n");
+    return NULL;
+}
 /*
  * Initialize a new hash table. Returns the current process ID (always zero in
  * the serial version)
@@ -28,10 +51,21 @@ static int rank;
  */
 int dht_init()
 {
+    int provided;
+
+    MPI_Init_thread(NULL, NULL, MPI_THREAD_MULTIPLE, &provided);
+    if (provided != MPI_THREAD_MULTIPLE) {
+        printf("ERROR: Cannot initialize MPI in THREAD_MULTIPLE mode.\n");
+        exit(EXIT_FAILURE);
+    }
+    MPI_Comm_size(MPI_COMM_WORLD, &nprocs);
+    MPI_Comm_rank(MPI_COMM_WORLD, &my_rank);
+
+    executing = true;
+    pthread_create(&server, NULL, server_func, NULL);
     local_init();
 
-    rank = 0;
-    return rank;
+    return my_rank;
 }
 
 
@@ -92,6 +126,14 @@ void dht_sync()
  */
 void dht_destroy(FILE *output)
 {
+    executing = false;
+    pthread_cond_signal(&server_cond);
+    pthread_join(server, NULL);
+    char *filename = (char*)malloc(sizeof(char) * 32);
+    snprintf(filename, 32, "dump-%d.txt", my_rank);
+    FILE *file = fopen(filename, "w");
+    fprintf(file, "this should be in a bunch of files.\n");
+    fclose(file);
     local_destroy(output);
 }
 
