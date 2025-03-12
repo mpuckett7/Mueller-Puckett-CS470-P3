@@ -5,7 +5,7 @@
  *
  * Implementation for distributed hash table (DHT).
  *
- * Name: 
+ * Name: Beau Mueller, Mason Puckett
  *
  */
 
