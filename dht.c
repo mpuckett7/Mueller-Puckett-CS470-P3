@@ -66,11 +66,14 @@ void *server_func(void *arg) {
         // pthread_mutex_unlock(&server_lock);
 
         struct pair_t pair;
-
+        
         MPI_Recv(&pair, sizeof(pair), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         if(pair.instruction == PUT){
-
+            printf("before server thread local put\n");
+            //if you commit this out then it runs to completion but if not then it seg faults
+            // local_put(pair.key, pair.value);
+            printf("after server thread local put\n");
         }else if(pair.instruction == GET){
 
         }else if(pair.instruction == SIZE){
