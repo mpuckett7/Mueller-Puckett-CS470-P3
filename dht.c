@@ -35,8 +35,8 @@ bool executing = false;     // are we still using the hash table?
  */
 struct pair_t {
     int instruction;
-    const char *key;
     long value;
+    char key[MAX_KEYLEN];
 };
 
 /*
@@ -70,20 +70,15 @@ void *server_func(void *arg) {
         MPI_Recv(&pair, sizeof(pair), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
 
         if(pair.instruction == PUT){
-            printf("before server thread local put\n");
-            //if you commit this out then it runs to completion but if not then it seg faults
-            // local_put(pair.key, pair.value);
-            printf("after server thread local put\n");
+            local_put(pair.key, pair.value);
         }else if(pair.instruction == GET){
 
         }else if(pair.instruction == SIZE){
 
         }else if(pair.instruction == DONE){
-            printf("inside of done\n");
             break;
         }
     }
-    printf("i'm about to return\n");
     return NULL;
 }
 
@@ -125,15 +120,16 @@ void dht_put(const char *key, long value)
 {
     int owner = hash(key);
 
+    struct pair_t pair;
+    pair.instruction = PUT;
+    snprintf(pair.key, strlen(key) + 1, key);
+    pair.value = value;
+
     if(my_rank == owner){
         //lock
         local_put(key, value);
         //unlock
     }else{
-        struct pair_t pair;
-        pair.instruction = PUT;
-        pair.key = key;
-        pair.value = value;
         MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, owner, 0, MPI_COMM_WORLD); 
     }
 }
@@ -171,7 +167,14 @@ size_t dht_size()
  */
 void dht_sync()
 {
-    // nothing to do in the serial version
+    // idrk what im doing nor do I know how to test this, probably a different input file
+    // something like this? that forces y to be said after x
+    // put x
+    // put y
+    // get x
+    // sync
+    // get y
+    MPI_Barrier(MPI_COMM_WORLD);
 }
 
 
@@ -183,14 +186,13 @@ void dht_sync()
 void dht_destroy(FILE *output)
 {
     MPI_Barrier(MPI_COMM_WORLD);
-    printf("post barrier\n");
 
     struct pair_t pair;
     pair.instruction = DONE;
 
     executing = false;
 
-    MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, (my_rank - 1 + nprocs % nprocs), 0, MPI_COMM_WORLD);
+    MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, (my_rank + nprocs % nprocs), 0, MPI_COMM_WORLD);
 
     // server_bool = true;
     // pthread_cond_signal(&server_cond);
