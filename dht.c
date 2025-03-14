@@ -81,7 +81,7 @@ void *server_func(void *arg)
 
             size_t s = local_size();
             
-            MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+            MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, stat.MPI_SOURCE, MPI_COMM_WORLD);
         }
         else if (pair.instruction == DONE)
         {
@@ -195,7 +195,7 @@ size_t dht_size()
     }
 
     size_t s = local_size();
-    MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+    MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, my_rank, MPI_COMM_WORLD);
 
     return global_size;
 }
@@ -227,8 +227,6 @@ void dht_destroy(FILE *output)
 
     MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, (my_rank + nprocs % nprocs), 0, MPI_COMM_WORLD);
 
-    // server_bool = true;
-    // pthread_cond_signal(&server_cond);
     pthread_join(server, NULL);
     local_destroy(output);
 }
