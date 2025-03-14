@@ -155,7 +155,22 @@ long dht_get(const char *key)
  */
 size_t dht_size()
 {
-    return local_size();
+    size_t global_size = 0;
+
+    printf("before local size call\n");
+    size_t tmp = local_size();
+    printf("after local_size call\n");
+    printf("%ld\n", tmp);
+
+    printf("Process %d: Before MPI_Reduce, tmp = %lu\n", my_rank, tmp);
+    fflush(stdout);
+
+    MPI_Reduce(&tmp, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
+    
+    printf("Process %d: After MPI_Reduce\n", my_rank);
+    fflush(stdout);
+
+    return global_size;
 }
 
 
