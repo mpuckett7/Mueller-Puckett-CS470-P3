@@ -7,6 +7,64 @@
  *
  * Name: Beau Mueller, Mason Puckett
  *
+ * 
+ * 1. Yes, we consulted chatgpt for help with understanding general MPI method usage and generating test cases. 
+ *    It was moderately helpful in the since that it would give us examples of MPI calls and uses but not a ton of direct application was gleamed. 
+ * 
+ * 2. Within our RPC protocol messages are distinguished by a field within a struct called "instruction" that allows us to tell what the proces is supposed to do
+ *    with the information within the struct. The struct holds the instruction and a key and value representing what hash pair is related to the instruction. In both put
+ *    and get point-to-point communication is utilized with a hash function on the key determining the owner of the said key-value pair which allows messages to be sent 
+ *    confidently to the correct process. Our rpc protocol is all synchronous as the point-to-point communication is blocking on both the sending and receiving ends. Additionally,
+ *    within the size command there is an MPI collective operation that we force every process into through point-to-point communication. The sync command is literally just a barrier
+ *    which forces all processes to wait for the rest. 
+ * 
+ * 3. For input file 4 here are two resulting prints
+ * 
+ *      Get("a") = 1
+        Get("b") = 2
+        Get("i") = 13
+        Get("c") = 3
+        Size = 12
+ * 
+ *      Get("a") = 1
+        Get("b") = 2
+        Get("c") = 3
+        Get("i") = 8
+        Size = 12
+ *  
+ *    This input file has a put that updates a known key (i), the result from get varies based off which process puts for the key i first in ordering.
+ * 
+ * 4. The biggest difficulty in creating a sort that we anticipate would be correctly ditributing the sorted information. The proposed process would sort the values locally then 
+ *    manually start to join together processes while sorting as we go. Since there is no MPI collective operation that allows for sorting to happen to the data there would be
+ *    a need for every rank to stop and be added to the growing locally sorted list. Then scatter the data evenly back to the separate processes.
+ * 
+ *     Psuedocode:
+ *     
+ *      mergesort(): 
+ *          local merge sort 
+ * 
+ *      mpi_merge():
+ * 
+ *          sorted_values = []
+ * 
+ *          if rank 0: 
+ *              merge_sort(local)
+ *              add rank 0's values
+ * 
+ *          for all procs
+ *              if not rank 0: 
+ *                  merge_sort(local)
+ *                  merge_sort(procs_local, sorted_values)
+ * 
+ *          #rank 0 would have all of the sorted values at this point
+ *          #could return or do whatever, this distributes it back to the processes
+ * 
+ *          MPI_Scatter 
+ * 
+ *      end
+ * 
+ * 5. 
+ * 
  */
 
 #include <mpi.h>
@@ -27,8 +85,6 @@ static const int DONE = 3;
 pthread_t server;       // server thread
 bool executing = false; // are we still using the hash table?
 size_t global_size = 0; // global size variable
-
-pthread_mutex_t lock =  PTHREAD_MUTEX_INITIALIZER;
 
 /*
  * Struct to hold key value pair
@@ -66,7 +122,9 @@ void *server_func(void *arg)
 
         struct pair_t pair;
         MPI_Status stat;
+
         MPI_Recv(&pair, sizeof(struct pair_t), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &stat);
+
         if (pair.instruction == PUT)
         {
             local_put(pair.key, pair.value);
@@ -76,7 +134,7 @@ void *server_func(void *arg)
             struct pair_t info;
             snprintf(info.key, strlen(pair.key) + 1, pair.key);
             info.value = local_get(pair.key);
-            printf("%d: sending <%s, %ld>\n", my_rank, info.key, info.value);
+
             MPI_Ssend(&info, sizeof(struct pair_t), MPI_BYTE, stat.MPI_SOURCE, 1, MPI_COMM_WORLD);
         }
         else if (pair.instruction == SIZE)
@@ -166,14 +224,15 @@ long dht_get(const char *key)
 
         struct pair_t pair;
         pair.instruction = GET;
-
         strncpy(pair.key, key, sizeof(char[MAX_KEYLEN]) - 1);
+
         MPI_Ssend(&pair, sizeof(struct pair_t), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
-        printf("%d: requested <%s>\n", my_rank, pair.key);
+   
         struct pair_t info;
         MPI_Status status;
+
         MPI_Recv(&info, sizeof(struct pair_t), MPI_BYTE, owner, 1, MPI_COMM_WORLD, &status);
-        printf("%d: Received <%s, %ld>\n", my_rank, info.key, info.value);
+
         return info.value;
     }
 }
@@ -198,6 +257,7 @@ size_t dht_size()
     }
 
     size_t s = local_size();
+    
     MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, my_rank, MPI_COMM_WORLD);
 
     return global_size;
@@ -234,14 +294,3 @@ void dht_destroy(FILE *output)
     local_destroy(output);
 }
 
-
-// stolen from main
-// size_t strnlen(const char *str, size_t max_len)
-// {
-//     const char *end = (const char *)memchr(str, '\0', max_len);
-//     if (end == NULL) {
-//         return max_len;
-//     } else {
-//         return end - str;
-//     }
-// }

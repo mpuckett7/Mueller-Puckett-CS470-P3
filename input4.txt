@@ -31,6 +31,7 @@ get c
 proc 3
 
 put k 4
+put i 13
 put l 2
 put m 1
 
