@@ -191,7 +191,7 @@ size_t dht_size()
         MPI_Ssend(&size_instruction, sizeof(size_instruction), MPI_BYTE, i, 0, MPI_COMM_WORLD);
         // now wait for ith process to message size back (unsigned long)
         size_t proc_size;
-        printf("message send, waiting to receive size back\n");
+        printf("proc %d waiting to receive local_size from proc %d\n", my_rank, i);
         MPI_Recv(&proc_size, 1, MPI_UNSIGNED_LONG, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
         global_size += proc_size;
     }
