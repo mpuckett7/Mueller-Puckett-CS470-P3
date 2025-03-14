@@ -28,7 +28,7 @@ pthread_t server;       // server thread
 bool executing = false; // are we still using the hash table?
 size_t global_size = 0; // global size variable
 
-pthread_mutex_t lock = 
+pthread_mutex_t lock =  PTHREAD_MUTEX_INITIALIZER;
 
 /*
  * Struct to hold key value pair
@@ -67,7 +67,6 @@ void *server_func(void *arg)
         struct pair_t pair;
         MPI_Status stat;
         MPI_Recv(&pair, sizeof(struct pair_t), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &stat);
-
         if (pair.instruction == PUT)
         {
             local_put(pair.key, pair.value);
@@ -78,7 +77,7 @@ void *server_func(void *arg)
             snprintf(info.key, strlen(pair.key) + 1, pair.key);
             info.value = local_get(pair.key);
             printf("%d: sending <%s, %ld>\n", my_rank, info.key, info.value);
-            MPI_Ssend(&info, sizeof(struct pair_t), MPI_BYTE, stat.MPI_SOURCE, 0, MPI_COMM_WORLD);
+            MPI_Ssend(&info, sizeof(struct pair_t), MPI_BYTE, stat.MPI_SOURCE, 1, MPI_COMM_WORLD);
         }
         else if (pair.instruction == SIZE)
         {
@@ -169,12 +168,11 @@ long dht_get(const char *key)
         pair.instruction = GET;
 
         strncpy(pair.key, key, sizeof(char[MAX_KEYLEN]) - 1);
-
         MPI_Ssend(&pair, sizeof(struct pair_t), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
         printf("%d: requested <%s>\n", my_rank, pair.key);
         struct pair_t info;
         MPI_Status status;
-        MPI_Recv(&info, sizeof(struct pair_t), MPI_BYTE, owner, 0, MPI_COMM_WORLD, &status);
+        MPI_Recv(&info, sizeof(struct pair_t), MPI_BYTE, owner, 1, MPI_COMM_WORLD, &status);
         printf("%d: Received <%s, %ld>\n", my_rank, info.key, info.value);
         return info.value;
     }
