@@ -1,0 +1,25 @@
+proc 0
+put a 100
+put b 200
+put c 300
+
+sync
+
+proc 1
+put d 400
+put e 500
+get a
+
+sync
+
+proc 2
+put f 600
+get b
+get c
+
+sync
+
+proc 3
+size
+
+sync
