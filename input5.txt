@@ -1,0 +1,19 @@
+proc 0
+put a 10
+put b 20
+put c 30
+
+sync
+
+proc 1
+put d 40
+put e 50
+
+sync
+
+proc 2
+get a
+get b
+get c
+
+sync
