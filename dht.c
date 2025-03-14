@@ -38,7 +38,6 @@ struct pair_t
     int instruction;
     long value;
     char key[MAX_KEYLEN];
-    int sender;
 };
 
 /*
@@ -71,8 +70,8 @@ void *server_func(void *arg)
         // pthread_mutex_unlock(&server_lock);
 
         struct pair_t pair;
-
-        MPI_Recv(&pair, sizeof(pair), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+        MPI_Status stat;
+        MPI_Recv(&pair, sizeof(pair), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &stat);
 
         if (pair.instruction == PUT)
         {
@@ -86,8 +85,8 @@ void *server_func(void *arg)
             // PRE CLASS NOTE: we don't actually need the send attribute we can just pass a MPI_Request
             // instead of MPI_STATUS_IGNORE to know which process the message (size request) comes from.
             size_t s = local_size();
-            printf("proc %d about to send size %lu to calling process %d\n", my_rank, s, pair.sender);
-            MPI_Ssend(&s, 1, MPI_UNSIGNED_LONG, pair.sender, 0, MPI_COMM_WORLD);
+            printf("proc %d about to send size %lu to calling process %d\n", my_rank, s, stat.MPI_SOURCE);    
+            MPI_Ssend(&s, 1, MPI_UNSIGNED_LONG, stat.MPI_SOURCE, 0, MPI_COMM_WORLD);
         }
         else if (pair.instruction == DONE)
         {
@@ -184,8 +183,6 @@ size_t dht_size()
         }
         struct pair_t size_instruction;
         size_instruction.instruction = SIZE;
-        // added sender attribute so other procs no where to send their local_size to
-        size_instruction.sender = my_rank;
 
         // first send a message to the ith process asking for size
         MPI_Ssend(&size_instruction, sizeof(size_instruction), MPI_BYTE, i, 0, MPI_COMM_WORLD);

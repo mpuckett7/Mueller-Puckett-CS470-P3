@@ -1,0 +1,33 @@
+proc 0
+
+put a 1
+put b 2
+put c 3
+
+sync
+
+size
+
+proc 1
+
+put d 4
+put e 5
+put g 6
+
+sync 
+
+proc 2
+
+put h 7
+put i 8 
+put j 9 
+
+sync
+
+proc 3
+
+put k 473829
+put l 239487
+put m 123567
+
+sync
