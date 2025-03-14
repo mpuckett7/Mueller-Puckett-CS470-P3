@@ -1,4 +1,0 @@
-Process 1
-  Key="d" Value=4
-  Key="h" Value=7
-  Key="l" Value=239487

@@ -24,6 +24,10 @@ put j 9
 
 sync
 
+get a
+get b
+get c
+
 proc 3
 
 put k 4
@@ -31,3 +35,5 @@ put l 2
 put m 1
 
 sync
+
+get i

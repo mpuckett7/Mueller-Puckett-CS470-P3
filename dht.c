@@ -28,6 +28,8 @@ pthread_t server;       // server thread
 bool executing = false; // are we still using the hash table?
 size_t global_size = 0; // global size variable
 
+pthread_mutex_t lock = 
+
 /*
  * Struct to hold key value pair
  */
@@ -38,6 +40,8 @@ struct pair_t
     char key[MAX_KEYLEN];
 };
 
+// stolen from main
+size_t strnlen(const char *str, size_t max_len);
 /*
  * given a key name, return the distributed hash table owner
  * (uses djb2 algorithm: http://www.cse.yorku.ca/~oz/hash.html)
@@ -62,7 +66,7 @@ void *server_func(void *arg)
 
         struct pair_t pair;
         MPI_Status stat;
-        MPI_Recv(&pair, sizeof(pair), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &stat);
+        MPI_Recv(&pair, sizeof(struct pair_t), MPI_BYTE, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, &stat);
 
         if (pair.instruction == PUT)
         {
@@ -73,8 +77,8 @@ void *server_func(void *arg)
             struct pair_t info;
             snprintf(info.key, strlen(pair.key) + 1, pair.key);
             info.value = local_get(pair.key);
-
-            MPI_Ssend(&info, sizeof(pair), MPI_BYTE, stat.MPI_SOURCE, 0, MPI_COMM_WORLD);
+            printf("%d: sending <%s, %ld>\n", my_rank, info.key, info.value);
+            MPI_Ssend(&info, sizeof(struct pair_t), MPI_BYTE, stat.MPI_SOURCE, 0, MPI_COMM_WORLD);
         }
         else if (pair.instruction == SIZE)
         {
@@ -142,7 +146,7 @@ void dht_put(const char *key, long value)
     }
     else
     {
-        MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
+        MPI_Ssend(&pair, sizeof(struct pair_t), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
     }
 }
 
@@ -158,19 +162,20 @@ long dht_get(const char *key)
     int owner = hash(key);
 
     if(my_rank == owner){
-
         return local_get(key);
     }else{
 
         struct pair_t pair;
         pair.instruction = GET;
 
-        MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
+        strncpy(pair.key, key, sizeof(char[MAX_KEYLEN]) - 1);
 
+        MPI_Ssend(&pair, sizeof(struct pair_t), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
+        printf("%d: requested <%s>\n", my_rank, pair.key);
         struct pair_t info;
-
-        MPI_Recv(&info, sizeof(info), MPI_BYTE, owner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-
+        MPI_Status status;
+        MPI_Recv(&info, sizeof(struct pair_t), MPI_BYTE, owner, 0, MPI_COMM_WORLD, &status);
+        printf("%d: Received <%s, %ld>\n", my_rank, info.key, info.value);
         return info.value;
     }
 }
@@ -191,7 +196,7 @@ size_t dht_size()
         if(my_rank == i){
             continue;
         }
-        MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, i, 0, MPI_COMM_WORLD);
+        MPI_Ssend(&pair, sizeof(struct pair_t), MPI_BYTE, i, 0, MPI_COMM_WORLD);
     }
 
     size_t s = local_size();
@@ -225,8 +230,20 @@ void dht_destroy(FILE *output)
 
     executing = false;
 
-    MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, (my_rank + nprocs % nprocs), 0, MPI_COMM_WORLD);
+    MPI_Ssend(&pair, sizeof(struct pair_t), MPI_BYTE, (my_rank + nprocs % nprocs), 0, MPI_COMM_WORLD);
 
     pthread_join(server, NULL);
     local_destroy(output);
 }
+
+
+// stolen from main
+// size_t strnlen(const char *str, size_t max_len)
+// {
+//     const char *end = (const char *)memchr(str, '\0', max_len);
+//     if (end == NULL) {
+//         return max_len;
+//     } else {
+//         return end - str;
+//     }
+// }
