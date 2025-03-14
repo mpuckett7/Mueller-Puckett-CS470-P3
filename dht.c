@@ -26,9 +26,7 @@ static const int DONE = 3;
 
 pthread_t server;       // server thread
 bool executing = false; // are we still using the hash table?
-// bool server_bool = false;   // condition variable failsafe
-// pthread_cond_t server_cond = PTHREAD_COND_INITIALIZER;
-// pthread_mutex_t server_lock = PTHREAD_MUTEX_INITIALIZER;
+size_t global_size = 0; // global size variable
 
 /*
  * Struct to hold key value pair
@@ -61,13 +59,6 @@ void *server_func(void *arg)
 {
     while (executing)
     {
-        // pthread_mutex_lock(&server_lock);
-        // while(!server_bool) {
-        //     pthread_cond_wait(&server_cond, &server_lock);
-        // }
-        // // do a single task, go back to waiting
-
-        // pthread_mutex_unlock(&server_lock);
 
         struct pair_t pair;
         MPI_Status stat;
@@ -79,14 +70,18 @@ void *server_func(void *arg)
         }
         else if (pair.instruction == GET)
         {
+            struct pair_t info;
+            snprintf(info.key, strlen(pair.key) + 1, pair.key);
+            info.value = local_get(pair.key);
+
+            MPI_Ssend(&info, sizeof(pair), MPI_BYTE, stat.MPI_SOURCE, 0, MPI_COMM_WORLD);
         }
         else if (pair.instruction == SIZE)
         {
-            // PRE CLASS NOTE: we don't actually need the send attribute we can just pass a MPI_Request
-            // instead of MPI_STATUS_IGNORE to know which process the message (size request) comes from.
+
             size_t s = local_size();
-            printf("proc %d about to send size %lu to calling process %d\n", my_rank, s, stat.MPI_SOURCE);    
-            MPI_Ssend(&s, 1, MPI_UNSIGNED_LONG, stat.MPI_SOURCE, 0, MPI_COMM_WORLD);
+            
+            MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
         }
         else if (pair.instruction == DONE)
         {
@@ -160,7 +155,24 @@ void dht_put(const char *key, long value)
  */
 long dht_get(const char *key)
 {
-    return local_get(key);
+    int owner = hash(key);
+
+    if(my_rank == owner){
+
+        return local_get(key);
+    }else{
+
+        struct pair_t pair;
+        pair.instruction = GET;
+
+        MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, owner, 0, MPI_COMM_WORLD);
+
+        struct pair_t info;
+
+        MPI_Recv(&info, sizeof(info), MPI_BYTE, owner, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
+
+        return info.value;
+    }
 }
 
 /*
@@ -171,30 +183,19 @@ long dht_get(const char *key)
  */
 size_t dht_size()
 {
-    size_t global_size = local_size();
-    printf("Process %d: Before sending things\n", my_rank);
-    fflush(stdout);
 
-    for (int i = 0; i < nprocs; i++)
-    {
-        if (i == my_rank)
-        {
+    struct pair_t pair;
+    pair.instruction = SIZE;
+
+    for(int i = 0; i < nprocs; i++){
+        if(my_rank == i){
             continue;
         }
-        struct pair_t size_instruction;
-        size_instruction.instruction = SIZE;
-
-        // first send a message to the ith process asking for size
-        MPI_Ssend(&size_instruction, sizeof(size_instruction), MPI_BYTE, i, 0, MPI_COMM_WORLD);
-        // now wait for ith process to message size back (unsigned long)
-        size_t proc_size;
-        printf("proc %d waiting to receive local_size from proc %d\n", my_rank, i);
-        MPI_Recv(&proc_size, 1, MPI_UNSIGNED_LONG, MPI_ANY_SOURCE, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-        global_size += proc_size;
+        MPI_Ssend(&pair, sizeof(pair), MPI_BYTE, i, 0, MPI_COMM_WORLD);
     }
 
-    printf("Process %d: After MPI_Reduce\n", my_rank);
-    fflush(stdout);
+    size_t s = local_size();
+    MPI_Reduce(&s, &global_size, 1, MPI_UNSIGNED_LONG, MPI_SUM, 0, MPI_COMM_WORLD);
 
     return global_size;
 }
