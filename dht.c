@@ -182,13 +182,6 @@ size_t dht_size()
  */
 void dht_sync()
 {
-    // idrk what im doing nor do I know how to test this, probably a different input file
-    // something like this? that forces y to be said after x
-    // put x
-    // put y
-    // get x
-    // sync
-    // get y
     MPI_Barrier(MPI_COMM_WORLD);
 }
 
