@@ -11,6 +11,7 @@ put d 40
 sync
 
 proc 2
-size
 
 sync
+
+size

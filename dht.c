@@ -7,63 +7,9 @@
  *
  * Name: Beau Mueller, Mason Puckett
  *
+ * Analysis Document: 
+ * https://docs.google.com/document/d/1MW23rOFJ281WrLb4mBndBRys4IkEKey5QkfeUKNpw9Y/edit?usp=sharing
  * 
- * 1. Yes, we consulted chatgpt for help with understanding general MPI method usage and generating test cases. 
- *    It was moderately helpful in the since that it would give us examples of MPI calls and uses but not a ton of direct application was gleamed. 
- * 
- * 2. Within our RPC protocol messages are distinguished by a field within a struct called "instruction" that allows us to tell what the proces is supposed to do
- *    with the information within the struct. The struct holds the instruction and a key and value representing what hash pair is related to the instruction. In both put
- *    and get point-to-point communication is utilized with a hash function on the key determining the owner of the said key-value pair which allows messages to be sent 
- *    confidently to the correct process. Our rpc protocol is all synchronous as the point-to-point communication is blocking on both the sending and receiving ends. Additionally,
- *    within the size command there is an MPI collective operation that we force every process into through point-to-point communication. The sync command is literally just a barrier
- *    which forces all processes to wait for the rest. 
- * 
- * 3. For input file 4 here are two resulting prints
- * 
- *      Get("a") = 1
-        Get("b") = 2
-        Get("i") = 13
-        Get("c") = 3
-        Size = 12
- * 
- *      Get("a") = 1
-        Get("b") = 2
-        Get("c") = 3
-        Get("i") = 8
-        Size = 12
- *  
- *    This input file has a put that updates a known key (i), the result from get varies based off which process puts for the key i first in ordering.
- * 
- * 4. The biggest difficulty in creating a sort that we anticipate would be correctly ditributing the sorted information. The proposed process would sort the values locally then 
- *    manually start to join together processes while sorting as we go. Since there is no MPI collective operation that allows for sorting to happen to the data there would be
- *    a need for every rank to stop and be added to the growing locally sorted list. Then scatter the data evenly back to the separate processes.
- * 
- *     Psuedocode:
- *     
- *      mergesort(): 
- *          local merge sort 
- * 
- *      mpi_merge():
- * 
- *          sorted_values = []
- * 
- *          if rank 0: 
- *              merge_sort(local)
- *              add rank 0's values
- * 
- *          for all procs
- *              if not rank 0: 
- *                  merge_sort(local)
- *                  merge_sort(procs_local, sorted_values)
- * 
- *          #rank 0 would have all of the sorted values at this point
- *          #could return or do whatever, this distributes it back to the processes
- * 
- *          MPI_Scatter 
- * 
- *      end
- * 
- * 5. 
  * 
  */
 
@@ -197,9 +143,7 @@ void dht_put(const char *key, long value)
 
     if (my_rank == owner)
     {
-        // lock
         local_put(key, value);
-        // unlock
     }
     else
     {
